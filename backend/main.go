@@ -62,42 +62,67 @@ func checkPasswordHash(password, hash string) bool {
 }
 
 func registerPlayer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
 	username := r.FormValue("username")
 	email := r.FormValue("email")
 	password := r.FormValue("password")
 
+	log.Printf("received registration request: username=%s, email=%s", username, email)
+
 	passwordHash, err := hashPassword(password)
 	if err != nil {
+		log.Printf("Error hashing password %v", err)
 		http.Error(w, "Error hashing password", http.StatusInternalServerError)
 		return
 	}
 
-	query := `INSERT INTO players (username, email, password_hash) VALUES ($1, $2, $3)`
-	_, err = db.Exec(query, username, email, passwordHash)
-	if err != nil {
-		http.Error(w, "Error creating account", http.StatusInternalServerError)
-	}
+	log.Printf("password hashed successfully for user %s", username)
 
-	fmt.Fprintf(w, "Account created successfully")
+	var playerId int
+	query := `INSERT INTO players (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id`
+	err = db.QueryRow(query, username, email, passwordHash).Scan(&playerId)
+	if err != nil {
+		log.Printf("Error inserting new player into database %v", err)
+		http.Error(w, "Error creating account", http.StatusInternalServerError)
+		return
+	}
+	
+	log.Printf("Account created successfully with Player ID: %d", playerId)
+	fmt.Fprintf(w, "Account created successfully with Player ID: %d", playerId)
 }
 
 func loginPlayer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
+	log.Printf("Received login request: username=%s", username)
+
 	var storedHash string
-	query := `SELECT password_hash FROM players WHERE username = $1`
-	err := db.QueryRow(query, username).Scan(&storedHash)
+	var playerId int
+	query := `SELECT id, password_hash FROM players WHERE TRIM(username) = $1`
+	err := db.QueryRow(query, username).Scan(&playerId, &storedHash)
 	if err != nil {
+		log.Printf("Error retreiving data: %v", err)
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		return
 	}
 
 	if !checkPasswordHash(password, storedHash) {
+		log.Printf("Invalid password for user: username=%s", username)
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		return
 	}
 
+	log.Printf("User logged in successfully: username=%s, playerId=%d", username, playerId)
 	fmt.Fprintf(w, "login successful")
 }
 
@@ -281,13 +306,13 @@ func main() {
 
 	corsHandler := handlers.CORS(handlers.AllowedOrigins([]string {"http://localhost:3000"}))(mux)
 
-	http.HandleFunc("/register", registerPlayer)
-	http.HandleFunc("/login", loginPlayer)
-	http.HandleFunc("/saveProgress", saveProgress)
-	http.HandleFunc("/loadProgress", loadProgress)
-	http.HandleFunc("/unlockItem", unlockItem)
-	http.HandleFunc("/getUnlockedItems", getUnlockedItems)
+	mux.HandleFunc("/register", registerPlayer)
+	mux.HandleFunc("/login", loginPlayer)
+	mux.HandleFunc("/saveProgress", saveProgress)
+	mux.HandleFunc("/loadProgress", loadProgress)
+	mux.HandleFunc("/unlockItem", unlockItem)
+	mux.HandleFunc("/getUnlockedItems", getUnlockedItems)
 
 	fmt.Println("server running on port 8080")
-	http.ListenAndServe(":8080", corsHandler)
+	log.Fatal(http.ListenAndServe(":8080", corsHandler))
 }
