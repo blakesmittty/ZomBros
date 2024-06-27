@@ -5,6 +5,7 @@ function Register() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [message, setMessage] = useState('');
+    const playerId = localStorage.getItem('playerId');
 
     const handleSubmit = async (e) => {
         e.preventDefault(); // prevent default form submission behavior
@@ -27,6 +28,7 @@ function Register() {
     return (
         <div>
             <h2>Register</h2>
+            <h2>playerID: {playerId}</h2>
             <form onSubmit={handleSubmit}>
                 <input
                     type='text'

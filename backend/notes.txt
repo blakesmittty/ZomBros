@@ -1,0 +1,3 @@
+use json web tokens to sign player ids so it can be verified
+if a users id changes, this needs to be reflected in local storage
+make playerid name consistent everywhere

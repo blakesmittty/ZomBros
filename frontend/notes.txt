@@ -1,0 +1,1 @@
+user logs in, directed to game page with options where they can connect or create room. then they choose character, then play

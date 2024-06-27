@@ -2,12 +2,15 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/websocket"
@@ -18,9 +21,15 @@ import (
 
 type GameRoom struct {
 	ID string
-	Players []*websocket.Conn
+	Players map[*websocket.Conn]*Player
+}
+
+type Player struct {
+	ID int 
+	Username string 
 }
 var rooms = make(map[string]*GameRoom)
+
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize: 1024,
@@ -123,7 +132,16 @@ func loginPlayer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("User logged in successfully: username=%s, playerId=%d", username, playerId)
-	fmt.Fprintf(w, "login successful")
+
+	response := map[string]interface{} {
+		"id": playerId,
+		"message": "login successful",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 func saveProgress(w http.ResponseWriter, r *http.Request) {
@@ -199,41 +217,62 @@ func getUnlockedItems(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func createRoomID() string {
-	return fmt.Sprintf("%06d", rand.Intn(1000000))
-}
 
 func createRoom() string {
-	roomID := createRoomID()
-	rooms[roomID] = &GameRoom{ID: roomID}
+	roomID := uuid.New().String()
+	rooms[roomID] = &GameRoom{
+		ID: roomID,
+		Players: make(map[*websocket.Conn]*Player),
+	}
+	fmt.Printf("created game room with ID: %s", roomID)
 	return roomID
 }
 
-func joinRoom(roomID string, ws *websocket.Conn) error {
+func createRoomEndpoint(w http.ResponseWriter, r *http.Request) {
+	roomID := createRoom()
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(roomID))
+	//TODO return user information ie. id => query database
+}
+
+func joinRoom(roomID string, ws *websocket.Conn, playerID int) error {
+
 	room, exists := rooms[roomID]
+
 	if !exists {
 		return fmt.Errorf("room does not exist")
 	}
+
 	if len(room.Players) >= 4 {
 		return fmt.Errorf("sorry, this room's full")
 	}
-	room.Players = append(room.Players, ws)
+	var player Player
+	err := db.QueryRow(`SELECT id, username FROM players WHERE id = $1`, playerID).Scan(&player.ID, &player.Username)
+	if err != nil {
+		return fmt.Errorf("could not retrieve player info: %v", err)
+	}
+
+	room.Players[ws] = &player
+	notifyPlayers(room)
 	return nil
 }
 
 func leaveRoom(roomID string, ws *websocket.Conn) {
+
 	room, exists := rooms[roomID]
+
 	if !exists {
 		return
 	}
-	for i, player := range room.Players {
-		if player == ws {
-			room.Players = append(room.Players[:i], room.Players[i+1:]...)
-			break
-		}
-	}
+
+
+	delete(room.Players, ws)
 	if len(room.Players) == 0 {
+
 		delete(rooms, roomID)
+
+	} else {
+		notifyPlayers(room)
 	}
 }
 
@@ -243,29 +282,57 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("could not upgrade to websocket: %v\n", err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		fmt.Println("closing websocket connection")
+		ws.Close()
+	}()
+
+	playerIDstr := r.URL.Query().Get("playerId")
+	roomID := r.URL.Query().Get("roomID")
+	username := r.URL.Query().Get("username")
+	if playerIDstr == "" || roomID == "" || username == "" {
+		ws.WriteMessage(websocket.TextMessage, []byte("Error: missing playerID, roomID, or username"))
+		return
+	}
+
+	playerID, err := strconv.Atoi(playerIDstr)
+	if err != nil {
+		ws.WriteMessage(websocket.TextMessage, []byte("Error: invalid playerID"))
+		return
+	}
+
+	player := &Player{ID: playerID, Username: username}
+
+	room, exists := rooms[roomID]
+	if !exists {
+		room = &GameRoom{ID: roomID, Players: make(map[*websocket.Conn]*Player)}
+		rooms[roomID] = room
+	}
+	room.Players[ws] = player
+	notifyPlayers(room)
 
 	//read initial message
 	_, msg, err := ws.ReadMessage()
 	if err != nil {
 		fmt.Printf("error reading initial message: %v\n", err)
+		log.Printf("error reading initial message: %v\n", err)
 		return
 	}
 
-	//expecting message to say create to make a room
+	//expecting message to say create to make a room or join
 	message := string(msg)
-	var roomID string
 	if message == "create" {
 		roomID = createRoom()
 		fmt.Printf("game room created: %s\n", roomID)
+		ws.WriteMessage(websocket.TextMessage, []byte(roomID))
 	} else if strings.HasPrefix(message, "join:") {
 		roomID = strings.TrimPrefix(message, "join:")
-		err := joinRoom(roomID, ws)
+		err := joinRoom(roomID, ws, playerID)
 		if err != nil {
 			ws.WriteMessage(websocket.TextMessage, []byte("Error: "+err.Error()))
 			return
 		}
-		fmt.Printf("joined room: %s\n", roomID)
+		fmt.Printf("playerID: %s joined room: %s\n",playerIDstr, roomID)
 	}
 
 	for {
@@ -276,20 +343,43 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		fmt.Printf("%s sent: %s\n", ws.RemoteAddr(), string(msg))
+		broadcastMessage(roomID, msg)
 	}
 }
 
-func broadcastMessage(roomID string, msg []byte, sender *websocket.Conn) {
+func notifyPlayers(room *GameRoom) {
+
+	playerList := make([]Player, 0, len(room.Players))
+	for _, player := range room.Players {
+		playerList = append(playerList, *player)
+	}
+	data, err := json.Marshal(playerList)
+	if err != nil {
+		log.Printf("Error marshaling player list: %v", err)
+		return
+	}
+	for conn := range room.Players {
+		err := conn.WriteMessage(websocket.TextMessage, data)
+		if err != nil {
+			log.Printf("websocket write error: %v", err)
+			fmt.Printf("error sending player list: %v\n", err)
+			conn.Close()
+			delete(room.Players, conn)
+		}
+	}
+}
+
+func broadcastMessage(roomID string, msg []byte) {
 	room, exists := rooms[roomID]
 	if !exists {
 		return
 	}
-	for _, player := range room.Players {
-		if player != sender {
-			err := player.WriteMessage(websocket.TextMessage, msg)
-			if err != nil {
-				fmt.Printf("Error broadcasting message: %v\n", err)
-			}
+	for conn := range room.Players {
+		err := conn.WriteMessage(websocket.TextMessage, msg)
+		if err != nil {
+			log.Printf("websocket write error: %v", err)
+			conn.Close()
+			delete(room.Players, conn)
 		}
 	}
 }
@@ -304,7 +394,12 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", handleConnections)
 
-	corsHandler := handlers.CORS(handlers.AllowedOrigins([]string {"http://localhost:3000"}))(mux)
+	corsHandler := handlers.CORS(
+		handlers.AllowedOrigins([]string {"http://localhost:3000"}),
+		handlers.AllowedMethods([]string{"GET", "POST"}),
+		handlers.AllowedHeaders([]string{"Content-Type"}),
+		
+	)(mux)
 
 	mux.HandleFunc("/register", registerPlayer)
 	mux.HandleFunc("/login", loginPlayer)
@@ -312,6 +407,7 @@ func main() {
 	mux.HandleFunc("/loadProgress", loadProgress)
 	mux.HandleFunc("/unlockItem", unlockItem)
 	mux.HandleFunc("/getUnlockedItems", getUnlockedItems)
+	mux.HandleFunc("/createRoom", createRoomEndpoint)
 
 	fmt.Println("server running on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", corsHandler))
