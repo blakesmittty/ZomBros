@@ -1,3 +1,7 @@
 use json web tokens to sign player ids so it can be verified
 if a users id changes, this needs to be reflected in local storage
 make playerid name consistent everywhere
+
+IMPORTANT: CLIENT NOT SENDING JOIN OR CREATE MUST FIX
+
+ACTUALLY GOING TO USE API ENDPOINTS FOR CREATING AND JOINING ROOMS PLEASE WORK PLEASE

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
-function Login({ setLoggedIn }) {
+function Login({ handleLogin }) {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [message, setMessage] = useState('');
     const playerId = localStorage.getItem('playerId');
     const navigate = useNavigate();
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -24,8 +25,9 @@ function Login({ setLoggedIn }) {
             const result = await response.json();
             if (response.ok) {
                 setMessage(result.message);
-                setLoggedIn(result.id);
-                navigate('/game');
+                handleLogin(result.id, result.username);
+                setUsername(result.username)
+                navigate(`/gameRoom?username=${result.username}`);
             } else {
                 setMessage(result.message || 'login failed. please try again');
             }
