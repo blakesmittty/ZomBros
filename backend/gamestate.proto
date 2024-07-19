@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+option go_package = "backend/gamestate";
+
+package gamestate;
+
+message Vector2D {
+    float x = 1;
+    float y = 2;
+}
+
+message Player {
+    int32 id = 1;
+    string username = 2;
+    Vector2D position = 3;
+    int32 health = 4;
+    string character = 5;
+    bool isReady = 6;
+    float aimAngle = 7;
+    repeated Item inventory = 8;
+}
+
+message Item {
+    string name = 1;
+    int32 id = 2;
+    int32 amount = 3;
+}
+
+message PlayerInput {
+  float move_x = 1;
+  float move_y = 2;
+  bool is_shooting = 3;
+  float aim_angle = 4;
+}
+
+message Zombie {
+    int32 id = 1;
+    Vector2D position = 2;
+    int32 health = 3;
+}
+
+message GameMap {
+    string name = 1;
+}
+
+message GameState {
+    repeated Player players = 1;
+    repeated Zombie zombies = 2;
+    GameMap map = 3;
+}

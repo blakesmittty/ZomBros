@@ -1,7 +1,7 @@
 import React, { useState } from "react"
 
 function CharacterSelect({ onSelectCharacter }) {
-    const characters = ['Character1', 'Character2', 'Character3', 'Character4'];
+    const characters = ['Hardman', 'Character2', 'Character3', 'Character4'];
 
     return (
         <div>

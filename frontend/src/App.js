@@ -1,15 +1,12 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import './App.css';
-import Game from './components/Game';
 import Register from './components/Register';
 import Login from './components/Login';
 import Items from './components/Items';
-import Room from './components/Room';
-import Lobby from './components/Lobby';
-import Room2 from './components/Room2';
 import GameRoom from './components/GameRoom';
 import Game2 from './components/Game2';
+import TestProto from './components/testProto';
 
 function App() {
   const [loggedIn, setLoggedIn] = useState(localStorage.getItem('loggedIn') === 'true');
@@ -38,13 +35,10 @@ function App() {
   return (
     <Router>
       <div className='App'>
-        <h1>Game</h1>
         <Routes>
           <Route path='/register' element={<Register />} />
           <Route path='/login' element={<Login handleLogin={handleLogin} />} />
           <Route path='/items' element={loggedIn ? <Items playerId={playerId} /> : <Navigate to='/login' />} />
-          {/*<Route path='/game' element={loggedIn ? <Game /> : <Navigate to='/login' />} />*/}
-          {/*<Route path='/' element={loggedIn ? <Navigate to='/game' /> : <Navigate to='/login' />} />*/}
           <Route path='/' element={loggedIn ? <GameRoom /> : <Navigate to='/login' />} />
           <Route path='/gameRoom' element={<GameRoom />} />
           <Route path='/room/:roomID' element={<Game2 />} />

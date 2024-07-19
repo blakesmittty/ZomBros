@@ -1,3 +1,10 @@
 user logs in, directed to game page with options where they can connect or create room. then they choose character, then play
 
 need to make sure game room exists before joining it
+
+
+work on proto. continue using protoc,
+    put proto file in frontend and compile it there
+if not, use pbjs
+
+if none work it must be a configuration issue, eslint or webpack or babel

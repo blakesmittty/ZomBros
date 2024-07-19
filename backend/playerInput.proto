@@ -1,8 +1,12 @@
 syntax = "proto3";
 
+option go_package = "backend/playerinput";
+
+package playerinput;
+
 message PlayerInput {
-    float move_x = 1;
-    float move_y = 2;
-    bool is_shooting = 3;
-    float aim_angle = 4;
+  float move_x = 1;
+  float move_y = 2;
+  bool is_shooting = 3;
+  float aim_angle = 4;
 }

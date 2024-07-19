@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/websocket"
@@ -20,6 +21,8 @@ type GameRoom struct {
 	ID string
 	Players map[*websocket.Conn]*Player
 	mutex sync.RWMutex
+	Zombies map[int]*Zombie
+	Map GameMap
 }
 
 type Player struct {
@@ -30,6 +33,9 @@ type Player struct {
 	Inventory []Item
 	IsReady bool `json:"isReady"`
 	Character string `json:"character"`
+	lastUpdate time.Time
+	AimAngle float32
+	mutex sync.Mutex
 }
 var (
 	rooms = make(map[string]*GameRoom)

@@ -52,6 +52,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	player := &Player{
 		ID: playerID,
 		Username: r.URL.Query().Get("username"),
+		//Position: Vector2D{X: 0, Y: 0},
+		//Health: 100,
 	}
 	room.mutex.Lock()
 	room.Players[ws] = player
@@ -69,21 +71,17 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			sendPlayerList(room)
 			break
 		}
-		if len(msg) == 13 {
-			input, err := readPlayerInput(msg)
-			if err != nil {
-            	log.Println("Error reading player input:", err)
-            	continue
-        	}
-			handlePlayerInput(player, input)
-		} else {
-			var data map[string]interface{}
-			err := json.Unmarshal(msg, &data)
-			if err != nil {
-				log.Println("Error parsing websocket message:", err)
+
+		var data map[string]interface{}
+		err = json.Unmarshal(msg, &data)
+		if err != nil {
+		    protoErr := handleProto(msg, player)//readPlayerInput(msg) 
+			if protoErr != nil {
+				log.Println("Error reading proto:", protoErr)
 				continue
 			}
-
+			//handlePlayerInput(player, input)
+		} else {
 			switch data["type"] {
 			case "selectCharacter":
 				log.Println("select character message:", data)
@@ -99,7 +97,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				log.Println("unknown message type:", data["type"])
 			}
 		}
-		//handleMessage(room, ws, messageType, p)
 	}
 }
 
@@ -134,6 +131,7 @@ func sendPlayerList(room *GameRoom) {
 }
 
 // possibly not needed currently
+/*
 func handleMessage(room *GameRoom, conn *websocket.Conn, messageType int, payload []byte) {
     // Implement your game logic here
     // This could include updating player positions, handling attacks, etc.
@@ -147,14 +145,20 @@ func handleMessage(room *GameRoom, conn *websocket.Conn, messageType int, payloa
         }
     }
 }
-
+*/
 func createRoom(w http.ResponseWriter, r *http.Request) {
 	roomID := uuid.New().String()
 	newRoom := &GameRoom{
 		ID: roomID,
 		Players: make(map[*websocket.Conn]*Player),
+		Zombies: make(map[int]*Zombie),
+		Map: GameMap{Name: "default_map"},
 	}
+	roomsMutex.Lock()
 	rooms[roomID] = newRoom
+	roomsMutex.Unlock()
+
+	go gameLoop(newRoom)
 	log.Printf("Created new room: %s", roomID)
 
 	json.NewEncoder(w).Encode(map[string]string{"roomID" : roomID})
