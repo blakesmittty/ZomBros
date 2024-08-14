@@ -5,3 +5,8 @@ make playerid name consistent everywhere
 IMPORTANT: CLIENT NOT SENDING JOIN OR CREATE MUST FIX
 
 ACTUALLY GOING TO USE API ENDPOINTS FOR CREATING AND JOINING ROOMS PLEASE WORK PLEASE 
+
+protoc --js_out=import_style=commonjs,binary:. path/to/yourfile.proto
+protoc --go_out=. --go_opt=paths=source_relative path/to/yourfile.proto
+
+add each players move_x, move_y to gamestate message for proper sprite rendering

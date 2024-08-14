@@ -9,14 +9,21 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func handleProto (data []byte, player *Player) (error) {
+func handleProto (data []byte, player *Player, room *GameRoom) (error) {
 	var playerInput pb.PlayerInput
 	now := time.Now()
 	deltaTime := now.Sub(player.lastUpdate).Seconds()
 	player.lastUpdate = now
 	if err := proto.Unmarshal(data, &playerInput); err == nil {
 		log.Println("received PlayerInput: ", playerInput)
-		handlePlayerInput(player, *processPlayerInput(&playerInput), deltaTime)
+		handlePlayerInput(player, *processPlayerInput(&playerInput), room, deltaTime)
+		return nil
+	}
+
+	var shootEvent pb.ShootEvent
+	if err := proto.Unmarshal(data, &shootEvent); err == nil {
+		log.Println("received shoot event: ", shootEvent)
+		handleShootEvent(player, room, &shootEvent)
 		return nil
 	}
 
@@ -43,6 +50,8 @@ func processPlayer(state *pb.Player) *Player {
 		Position: convertVector2D(state.Position),
 		Health: int(state.GetHealth()),
 		AimAngle: state.GetAimAngle(),
+		MoveX: state.GetMoveX(),
+		MoveY: state.GetMoveY(),
 	}
 }
 

@@ -52,8 +52,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	player := &Player{
 		ID: playerID,
 		Username: r.URL.Query().Get("username"),
-		//Position: Vector2D{X: 0, Y: 0},
-		//Health: 100,
+		Position: Vector2D{X: 0, Y: 0},
+		Health: 100,
 	}
 	room.mutex.Lock()
 	room.Players[ws] = player
@@ -61,12 +61,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 	sendPlayerList(room)
 
+	// message loop 
 	for {
 		_, msg, err := ws.ReadMessage()
 		if err != nil {
 			log.Println(err)
 			room.mutex.Lock()
 			delete(room.Players, ws)
+			//room.removePlayer(ws)
 			room.mutex.Unlock()
 			sendPlayerList(room)
 			break
@@ -75,12 +77,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		var data map[string]interface{}
 		err = json.Unmarshal(msg, &data)
 		if err != nil {
-		    protoErr := handleProto(msg, player)//readPlayerInput(msg) 
+		    protoErr := handleProto(msg, player, room)//readPlayerInput(msg) 
 			if protoErr != nil {
 				log.Println("Error reading proto:", protoErr)
 				continue
 			}
-			//handlePlayerInput(player, input)
 		} else {
 			switch data["type"] {
 			case "selectCharacter":
@@ -93,11 +94,27 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room.Players[ws] = player
 				room.mutex.Unlock()
 				sendPlayerList(room)
+				checkAllPlayersReady(room)
+			/*
+			case "allReady":
+				go gameLoop(room)
+			*/
 			default: 
 				log.Println("unknown message type:", data["type"])
 			}
 		}
 	}
+}
+
+func checkAllPlayersReady(room *GameRoom) {
+	//room.mutex.Lock()
+	//defer room.mutex.Unlock()
+	for _, player := range room.Players {
+		if !player.IsReady {
+			return
+		}
+	}
+	go gameLoop(room)
 }
 
 func (gr *GameRoom)  getPlayerList() []*Player {
@@ -130,22 +147,6 @@ func sendPlayerList(room *GameRoom) {
 	room.mutex.RUnlock()
 }
 
-// possibly not needed currently
-/*
-func handleMessage(room *GameRoom, conn *websocket.Conn, messageType int, payload []byte) {
-    // Implement your game logic here
-    // This could include updating player positions, handling attacks, etc.
-    // You'll need to broadcast updates to all players in the room
-
-    for playerConn := range room.Players {
-        if err := playerConn.WriteMessage(messageType, payload); err != nil {
-            log.Println(err)
-            delete(room.Players, playerConn)
-            playerConn.Close()
-        }
-    }
-}
-*/
 func createRoom(w http.ResponseWriter, r *http.Request) {
 	roomID := uuid.New().String()
 	newRoom := &GameRoom{
@@ -153,12 +154,14 @@ func createRoom(w http.ResponseWriter, r *http.Request) {
 		Players: make(map[*websocket.Conn]*Player),
 		Zombies: make(map[int]*Zombie),
 		Map: GameMap{Name: "default_map"},
+		Round: 0,
+		MaxZombiesPerRound: 30,
 	}
 	roomsMutex.Lock()
 	rooms[roomID] = newRoom
 	roomsMutex.Unlock()
 
-	go gameLoop(newRoom)
+	//go gameLoop(newRoom)
 	log.Printf("Created new room: %s", roomID)
 
 	json.NewEncoder(w).Encode(map[string]string{"roomID" : roomID})
@@ -191,41 +194,29 @@ func joinRoom(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-/*
-func joinRoom(roomID string, ws *websocket.Conn, playerID int) error {
-	room, exists := rooms[roomID]
-	if !exists {
-		return fmt.Errorf("room does not exist")
-	}
+func (room *GameRoom) removePlayer(ws *websocket.Conn) {
+	room.mutex.Lock()
+	defer room.mutex.Unlock()
 
-	if len(room.Players) >= 4 {
-		return fmt.Errorf("sorry, this room's full")
-	}
-	var player Player
-	err := db.QueryRow(`SELECT id, username FROM players WHERE id = $1`, playerID).Scan(&player.ID, &player.Username)
-	if err != nil {
-		return fmt.Errorf("could not retrieve player info: %v", err)
-	}
-
-	room.Players[ws] = &player
-	fmt.Printf("After joining a room: Rooms: %v, rooms[roomid]: %v, rooms[roomid].players: %v\n\n", rooms, rooms[roomID], rooms[roomID].Players)
-	notifyPlayers(room)
-	return nil
-}
-*/
-/*
-func leaveRoom(roomID string, ws *websocket.Conn) {
-	room, exists := rooms[roomID]
+	player, exists := room.Players[ws]
 	if !exists {
 		return
 	}
+
 	delete(room.Players, ws)
-	if len(room.Players) == 0 {
 
-		delete(rooms, roomID)
+	room.broadcastPlayerDisconnect(player)
 
-	} else {
-		notifyPlayers(room)
+	ws.Close()
+}
+
+func (room *GameRoom) broadcastPlayerDisconnect(player *Player) {
+	for ws := range room.Players {
+		err := ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("Player %d disconnected", player.Username)))
+		if err != nil {
+			log.Printf("Error sending disconnect message: %v", err)
+			ws.Close()
+			delete(room.Players, ws)
+		}
 	}
 }
-	*/

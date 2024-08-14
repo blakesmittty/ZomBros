@@ -18,6 +18,23 @@ message Player {
     bool isReady = 6;
     float aimAngle = 7;
     repeated Item inventory = 8;
+    float move_x = 9;
+    float move_y = 10;
+}
+
+message ShootEvent {
+    int32 playerId = 1;
+    float direction = 2;
+    int64 timestamp = 3;
+    string weapon = 4;
+}
+
+message Bullet {
+    string id = 1;
+    Vector2D position = 2;
+    float direction = 3;
+    float speed = 4;
+    string projectile = 5;
 }
 
 message Item {
@@ -46,5 +63,6 @@ message GameMap {
 message GameState {
     repeated Player players = 1;
     repeated Zombie zombies = 2;
-    GameMap map = 3;
+    repeated Bullet bullets = 3;
+    GameMap map = 4;
 }

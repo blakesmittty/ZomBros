@@ -1,0 +1,101 @@
+{
+    "frames": {
+        "run_left_0": {
+            "frame": {
+                "x": 0,
+                "y": 0,
+                "w": 700,
+                "h": 700
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 700,
+                "h": 700
+            },
+            "sourceSize": {
+                "w": 700,
+                "h": 700
+            }
+        },
+        "run_left_1": {
+            "frame": {
+                "x": 700,
+                "y": 0,
+                "w": 700,
+                "h": 700
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 700,
+                "h": 700
+            },
+            "sourceSize": {
+                "w": 700,
+                "h": 700
+            }
+        },
+        "run_left_2": {
+            "frame": {
+                "x": 0,
+                "y": 700,
+                "w": 700,
+                "h": 700
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 700,
+                "h": 700
+            },
+            "sourceSize": {
+                "w": 700,
+                "h": 700
+            }
+        },
+        "run_left_3": {
+            "frame": {
+                "x": 700,
+                "y": 700,
+                "w": 700,
+                "h": 700
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 700,
+                "h": 700
+            },
+            "sourceSize": {
+                "w": 700,
+                "h": 700
+            }
+        }
+    },
+    "meta": {
+        "image": "druggie_left_not_firing.png",
+        "format": "RGBA8888",
+        "size": {
+            "w": 1400,
+            "h": 1400
+        },
+        "scale": "1"
+    },
+    "animations": {
+        "animation": [
+            "run_left_0",
+            "run_left_1",
+            "run_left_2",
+            "run_left_3"
+        ]
+    }
+}

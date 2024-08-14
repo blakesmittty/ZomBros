@@ -1,3 +1,4 @@
+/*
 import React from "react";
 import '../style/CharacterSprite.css';
 
@@ -7,7 +8,7 @@ const CharacterSprite = ({ character }) => {
     }
 
     //const spritePath = 'frontend/src/sprites/Hardman_R-Sheet.png';//fill in
-    const spritePath = require(`../sprites/${character}.png`);
+    const spritePath = require(`/sprites/${character}.png`);
 
     return (
         <div
@@ -18,3 +19,4 @@ const CharacterSprite = ({ character }) => {
 };
 
 export default CharacterSprite;
+*/

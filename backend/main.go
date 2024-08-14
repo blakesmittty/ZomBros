@@ -22,7 +22,13 @@ type GameRoom struct {
 	Players map[*websocket.Conn]*Player
 	mutex sync.RWMutex
 	Zombies map[int]*Zombie
+	Bullets []*Bullet
 	Map GameMap
+	DifficultyMultiplier float64
+	Round int
+	MaxZombiesPerRound int
+	MaxZombiesOnScreen int
+	ZombieSpawnRate time.Duration
 }
 
 type Player struct {
@@ -36,6 +42,8 @@ type Player struct {
 	lastUpdate time.Time
 	AimAngle float32
 	mutex sync.Mutex
+	MoveX float32
+	MoveY float32
 }
 var (
 	rooms = make(map[string]*GameRoom)

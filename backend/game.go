@@ -2,8 +2,10 @@ package main
 
 import (
 	pb "backend/gamestate"
+	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -14,6 +16,7 @@ type GameState struct {
 	Players map[string]*Player 
 	Zombies []*Zombie
 	Map *GameMap
+	Bullets []*Bullet
 	//Rules *GameRules
 }
 
@@ -34,6 +37,13 @@ type Zombie struct {
 	Speed float64
 }
 
+type Bullet struct {
+	ID int
+	Position Vector2D
+	Direction float32
+	Speed float64
+}
+
 type Vector2D struct {
 	X, Y float64
 }
@@ -44,7 +54,36 @@ type Item struct {
 }
 
 const PLAYER_SPEED = 100.0
-const DEFAULT_ZOMBIE_SPEED = 100.0
+const DEFAULT_ZOMBIE_SPEED = 90.0
+const DEFAULT_BULLET_SPEED = 300.0
+
+const (
+	MAP_MIN_X = 0
+	MAP_MAX_X = 3000
+	MAP_MIN_Y = 0
+	MAP_MAX_Y = 3000
+)
+
+var zombieSpawns = []Vector2D{
+	{X: 600, Y: 600},
+	{X: 600, Y: 1200},
+	{X: 600, Y: 1800},
+	{X: 600, Y: 2400},
+	{X: 1200, Y: 600},
+	{X: 1200, Y: 1200},
+	{X: 1200, Y: 1800},
+	{X: 1200, Y: 2400},
+	{X: 1800, Y: 600},
+	{X: 1800, Y: 1200},
+	{X: 1800, Y: 1800},
+	{X: 1800, Y: 2400},
+	{X: 2400, Y: 600},
+	{X: 2400, Y: 1200},
+	{X: 2400, Y: 1800},
+	{X: 2400, Y: 2400},
+}
+
+
 
 func calculateDistance(a, b Vector2D) float64 {
 	distX := a.X - b.X
@@ -52,52 +91,209 @@ func calculateDistance(a, b Vector2D) float64 {
 	return math.Sqrt((distX * distX) + (distY * distY))
 }
 
+func generateBulletID() int {
+	return int(time.Now().UnixNano())
+}
+
+func generateZombieID() int {
+	return rand.Intn(10000000)
+}
+//broken
+func (room *GameRoom) updateDifficulty() {
+	room.DifficultyMultiplier = 1 + (float64(room.Round) * 0.1)
+	room.ZombieSpawnRate = time.Duration(math.Max(1000, float64(5000 - (room.Round * 200)))) * time.Millisecond
+	room.MaxZombiesPerRound = 30 + (room.Round * 4)
+}
+//broken
+func startRound(room *GameRoom) {
+	//room.mutex.Lock()
+	//defer room.mutex.Unlock()
+	//room.mutex.Lock()
+	room.updateDifficulty()
+	//room.mutex.Unlock()
+	for i := 0; i < room.MaxZombiesPerRound; i++ {
+		//spawnDelay := time.Duration(float64(room.ZombieSpawnRate) / room.DifficultyMultiplier)
+		//time.Sleep(3 * time.Second)
+		//room.mutex.Lock()
+		spawnZombie(room)
+		//room.mutex.Unlock()
+		log.Printf("zombie spawned: %d\n", i+1)
+	}
+	log.Println("round started with difficulty multiplier: ", room.DifficultyMultiplier)
+}
+
+func getRandomZombieSpawnOutsideMap() Vector2D {
+	edge := rand.Intn(4)
+	var pos Vector2D
+	switch edge {
+	case 0:
+		pos = Vector2D{X: float64(rand.Intn(MAP_MAX_X)), Y: float64(MAP_MIN_Y - 100)}
+	case 1: 
+		pos = Vector2D{X: float64(MAP_MAX_X + 100), Y: float64(rand.Intn(MAP_MAX_Y))}
+	case 2: 
+		pos = Vector2D{X: float64(rand.Intn(MAP_MAX_X)), Y: float64(MAP_MAX_Y + 100)}
+	case 3: 
+		pos = Vector2D{X: float64(MAP_MIN_X - 100), Y: float64(rand.Intn(MAP_MAX_Y))}
+	}
+	return pos
+}
+
+func getClosestZombieSpawn(room *GameRoom) Vector2D {
+	// make better
+	//room.mutex.Lock()
+	//defer room.mutex.Unlock()
+	minDistance := math.MaxFloat64
+	spawnPoint := 0
+	for _, player := range room.Players {
+		for i, point := range zombieSpawns {
+			dist := calculateDistance(player.Position, point)
+			if dist < minDistance {
+				spawnPoint = i
+				minDistance = dist
+			}
+		}
+	}
+	return zombieSpawns[spawnPoint]
+}
+//broken
+func spawnZombie(room *GameRoom) {
+	newZombie := &Zombie{
+		ID: generateZombieID(),
+		//Position: getClosestZombieSpawn(room),
+		Position: getRandomZombieSpawnOutsideMap(),
+		Health: 100,
+		Speed: DEFAULT_ZOMBIE_SPEED,
+	}
+
+	//room.mutex.Lock()
+	room.Zombies[newZombie.ID] = newZombie
+	//room.mutex.Unlock()
+	log.Printf("Spawned zombie with id %d at position: (%f, %f)\n", newZombie.ID, newZombie.Position.X, newZombie.Position.Y)
+}
+
+func handleShootEvent(player *Player, room *GameRoom, shootEvent *pb.ShootEvent) {
+	// determine weapon type here
+
+	room.mutex.Lock()
+	defer room.mutex.Unlock()
+
+	//log.Printf("shoot event for player %d at pos (%.2f, %.2f) direction: %.2f", player.ID, player.Position.X, player.Position.Y, shootEvent.Direction)
+
+	if shootEvent == nil {
+		log.Println("shoot event nil")
+		return
+	}
+
+	bullet := &Bullet{
+		ID: generateBulletID(),
+		Position: player.Position,
+		Direction: shootEvent.Direction,
+		Speed: DEFAULT_BULLET_SPEED,
+	}
+
+
+	//log.Printf("generated bullet id %d at pos(%.2f, %.2f) direction: %.2f", bullet.ID, bullet.Position.X, bullet.Position.Y, bullet.Direction)
+
+	room.Bullets = append(room.Bullets, bullet)
+	//log.Printf("bullet added to room. total bullets: %d", len(room.Bullets))
+}
+
+func updateBulletPosition(bullet *Bullet, deltaTime float64) {
+	bullet.Position.X += math.Cos(float64(bullet.Direction)) * bullet.Speed * deltaTime
+	bullet.Position.Y += math.Sin(float64(bullet.Direction)) * bullet.Speed * deltaTime
+}
+
+func filterActiveBullets(bullets []*Bullet) []*Bullet {
+	var activeBullets []*Bullet
+	for _, bullet := range bullets {
+		if !bulletOutOfBounds(bullet) {
+			activeBullets = append(activeBullets, bullet)
+		} else {
+			log.Printf("bullet out of bounds at position: (%f, %f) \n", bullet.Position.X, bullet.Position.Y)
+		}
+	}
+	return activeBullets
+}
+
+func bulletOutOfBounds(bullet *Bullet) bool {
+	return bullet.Position.X < 0 || bullet.Position.X > 3000 || bullet.Position.Y < 0 || bullet.Position.Y > 3000
+}
+
+func detectCollisions(room *GameRoom) {
+	log.Printf("in detect collisions")
+	room.mutex.Lock()
+	defer room.mutex.Unlock()
+	var remainingBullets []*Bullet 
+	for _, bullet := range room.Bullets {
+		//log.Printf("in for bullet loop")
+		bulletCollided := false
+
+		for _, zombie := range room.Zombies {
+			//log.Printf("in for zombie loop")
+			//log.Printf("zombie.position", zombie.Position)
+			//log.Printf("bullet.position", bullet.Position)
+			//dist := calculateDistance(bullet.Position, zombie.Position)
+			//log.Printf("distance calc: ", dist)
+			if calculateDistance(bullet.Position, zombie.Position) < 25.0 {
+				//log.Printf("in if calcdist")
+				zombie.Health -= 50
+				if zombie.Health <= 0 {
+					log.Printf("zombie id: %d is dead and will be deleted", zombie.ID)
+					delete(room.Zombies, zombie.ID)
+				}
+				bulletCollided = true
+				break
+			}
+		}
+		if !bulletCollided {
+			remainingBullets = append(remainingBullets, bullet)
+		}
+	}
+	room.Bullets = remainingBullets
+}
+
 func gameLoop(room *GameRoom) {
 	ticker := time.NewTicker(time.Millisecond * 50)
 	defer ticker.Stop()
 
 	var lastUpdate time.Time
-	
+	//room.Round = 1
+
 	for {
 		select {
 		case <-ticker.C:
 			now := time.Now()
 			if !lastUpdate.IsZero() {
 				deltaTime := now.Sub(lastUpdate).Seconds()
-				//room.mutex.Lock()
+		
 				updateGameState(room, deltaTime)
+				detectCollisions(room)
 				broadcastGameState(room)
-				//room.mutex.Unlock()
+		
 			}
 			lastUpdate = now
 		}
 	}
 }
 
-func handleZombies(room *GameRoom) {
-	for _, player := range room.Players {
-		if len(room.Zombies) < len(room.Players) {
-			newZombie := &Zombie{
-				ID: len(room.Zombies),
-				Position: Vector2D{X: player.Position.X + 50, Y: player.Position.Y + 50},
-				Health: 100,
-				Speed: 1.0,
-			}
-			room.Zombies[newZombie.ID] = newZombie
-		}
-	}
-}
-
 func updateGameState(room *GameRoom, deltaTime float64) {
-	// update player positions
-	// move zombies
-	// check for collisions
-	// apply game rules
-
 	room.mutex.Lock()
 	defer room.mutex.Unlock()
+	//log.Println("current zombies: ", len(room.Zombies))
+	//log.Println("zombies array: ", room.Zombies)
+	//handleZombies(room, 50)
 	
-	handleZombies(room)
+	if len(room.Zombies) == 0 {
+		log.Printf("room round", room.Round)
+		room.Round++
+		startRound(room)
+	}
+	
+	for _, bullet := range room.Bullets {
+		updateBulletPosition(bullet, deltaTime)
+	}
+
+	room.Bullets = filterActiveBullets(room.Bullets)
 
 	for _, zombie := range room.Zombies {
 		if len(room.Players) > 0 {
@@ -112,7 +308,6 @@ func updateGameState(room *GameRoom, deltaTime float64) {
 			}
 			if closestPlayer != nil {
 				moveTowards(zombie, closestPlayer.Position, deltaTime)
-				log.Printf("Zombie %d moved towards player at position (%.2f, %.2f)", zombie.ID, closestPlayer.Position.X, closestPlayer.Position.Y)
 			}
 		}
 	}
@@ -141,6 +336,7 @@ func broadcastGameState(room *GameRoom) {
 	gameState := &pb.GameState{
 		Players: []*pb.Player{},
 		Zombies: []*pb.Zombie{},
+		Bullets: []*pb.Bullet{},
 		Map: &pb.GameMap{Name: room.Map.Name},
 	}
 
@@ -153,6 +349,8 @@ func broadcastGameState(room *GameRoom) {
 			Character: player.Character,
 			IsReady: player.IsReady,
 			AimAngle: player.AimAngle,
+			MoveX: player.MoveX,
+			MoveY: player.MoveY,
 		})
 	}
 
@@ -164,8 +362,17 @@ func broadcastGameState(room *GameRoom) {
 			Health: int32(zombie.Health),
 		})
 	}
+
+	for _, bullet := range room.Bullets {
+		gameState.Bullets = append(gameState.Bullets, &pb.Bullet{
+			Id: fmt.Sprintf("%d", bullet.ID),
+			Position: &pb.Vector2D{X: float32(bullet.Position.X), Y: float32(bullet.Position.Y)},
+			Direction: bullet.Direction,
+			Speed: float32(bullet.Speed),
+		})
+	}
 	
-	log.Println("populated game state: ", gameState)
+	//log.Println("populated game state: ", gameState)
 
 	data, err := proto.Marshal(gameState)
 	if err != nil {
@@ -177,12 +384,12 @@ func broadcastGameState(room *GameRoom) {
 		if err := ws.WriteMessage(websocket.BinaryMessage, data); err != nil {
 			log.Println("Error sending game state: ", err)
 		}
-		log.Println("sent gamestate: (proto) ", data)
-		log.Println("sent gamestate: (unmarshal)", gameState)
+		//log.Println("sent gamestate: (proto) ", data)
+		//log.Println("sent gamestate: (unmarshal)", gameState)
 	}
 }
 
-func handlePlayerInput(player *Player, input PlayerInput, deltaTime float64) {
+func handlePlayerInput(player *Player, input PlayerInput, room *GameRoom, deltaTime float64) {
 	// updaet player state based on input
 	// for example, move the player
 
@@ -190,37 +397,25 @@ func handlePlayerInput(player *Player, input PlayerInput, deltaTime float64) {
 	defer player.mutex.Unlock()
 
 	// update player state based on input
+	log.Println("player input: ", input.MoveX, input.MoveY)
 	player.Position.X += float64(input.MoveX) * PLAYER_SPEED * deltaTime
 	player.Position.Y += float64(input.MoveY) * PLAYER_SPEED * deltaTime
 
-	/*
-	if input.IsShooting {
-		// handle shooting logic
-	}
-		*/
 	player.AimAngle = input.AimAngle
+	player.MoveX = input.MoveX
+	player.MoveY = input.MoveY
 
 	log.Printf("player %d input: %+v", player.ID, input)
+	
+	if input.IsShooting {
+		handleShootEvent(player, room, &pb.ShootEvent{
+			PlayerId: int32(player.ID),
+			Direction: input.AimAngle,
+		})
+	}
+			
 }
 
-/*
-func updateZombies(zombies []*Zombie, players map[string]*Player) {
-	for _, zombie := range zombies {
-		nearestPlayer := findNearestPlayer(zombie, players)
-		moveTowards(zombie, nearestPlayer)
-	}
-}
-
-func checkCollisions(players map[string]*Player, zombies []*Zombie) {
-	for _, player := range players {
-		for _, zombie := range zombies {
-			if isColliding(player, zombie) {
-				handlePlayerZombieCollision(player, zombie)
-			}
-		}
-	}
-}
-*/
 func handleGameEvents(room *GameRoom) {
 	// check for player damage
 	// handle item pickups
