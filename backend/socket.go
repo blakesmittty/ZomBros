@@ -95,10 +95,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room.mutex.Unlock()
 				sendPlayerList(room)
 				checkAllPlayersReady(room)
-			/*
-			case "allReady":
-				go gameLoop(room)
-			*/
+			
 			default: 
 				log.Println("unknown message type:", data["type"])
 			}

@@ -138,6 +138,7 @@ func getRandomZombieSpawnOutsideMap() Vector2D {
 	return pos
 }
 
+
 func getClosestZombieSpawn(room *GameRoom) Vector2D {
 	// make better
 	//room.mutex.Lock()
@@ -153,6 +154,7 @@ func getClosestZombieSpawn(room *GameRoom) Vector2D {
 			}
 		}
 	}
+	
 	return zombieSpawns[spawnPoint]
 }
 //broken
@@ -225,17 +227,9 @@ func detectCollisions(room *GameRoom) {
 	defer room.mutex.Unlock()
 	var remainingBullets []*Bullet 
 	for _, bullet := range room.Bullets {
-		//log.Printf("in for bullet loop")
 		bulletCollided := false
-
 		for _, zombie := range room.Zombies {
-			//log.Printf("in for zombie loop")
-			//log.Printf("zombie.position", zombie.Position)
-			//log.Printf("bullet.position", bullet.Position)
-			//dist := calculateDistance(bullet.Position, zombie.Position)
-			//log.Printf("distance calc: ", dist)
 			if calculateDistance(bullet.Position, zombie.Position) < 25.0 {
-				//log.Printf("in if calcdist")
 				zombie.Health -= 50
 				if zombie.Health <= 0 {
 					log.Printf("zombie id: %d is dead and will be deleted", zombie.ID)

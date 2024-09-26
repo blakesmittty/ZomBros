@@ -48,6 +48,7 @@ type Player struct {
 var (
 	rooms = make(map[string]*GameRoom)
 	roomsMutex sync.RWMutex
+	
 )
 
 var db *sql.DB
